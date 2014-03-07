@@ -22,9 +22,9 @@ For example, if you have the dependency
 {"name": "openssl", "version": "1.0"}
 ```
 
-you must have a directory somewhere like this `packages\openssl\1.0`.
+you must have a directory somewhere like this `/packages/openssl/1.0`.
 
-Install from this folder with `libget -p packages`.
+Install from this folder with `libget -p "/packages"`.
 
 
 Building
