@@ -4,7 +4,8 @@
 module Main where
 
 import           Control.Exception (throw)
-import           Control.Monad (when, forM_, unless)
+import           Control.Monad (when, forM_)
+import           Control.Conditional (unlessM, ifM)
 import           Data.Aeson (encode, decode)
 import           Data.Aeson.TH
 import           Data.ByteString.Lazy (ByteString)
@@ -13,8 +14,6 @@ import           Data.Char (toLower)
 import           Data.Functor ((<$>))
 import           Data.Map (Map, toList)
 import           Data.Maybe (maybe)
-import           Data.Text (Text)
-import qualified Data.Text as T
 import           Data.Version (showVersion)
 import           Options.Applicative
 import           System.Directory (doesFileExist, doesDirectoryExist, removeDirectoryRecursive)
@@ -39,13 +38,14 @@ data Dependency = Dependency
 $(deriveJSON defaultOptions {fieldLabelModifier=jsonField} ''Dependency)
 
 data Spec = Spec
-  { _specVersion      :: !Text
+  { _specVersion      :: !String
   , _specDependencies :: Map FilePath Dependency
   } deriving (Show, Eq)
 $(deriveJSON defaultOptions {fieldLabelModifier=jsonField} ''Spec)
 
 
-supportedSpecs = ["1"] :: [Text]
+supportedSpecs = ["1"] :: [String]
+
 
 srcDir :: FilePath -> Dependency -> FilePath
 srcDir packageDir (Dependency name ver) = packageDir </> name </> ver
@@ -56,40 +56,45 @@ copyDir' src dst = do
     putStrLn $ "Copying from " ++ src ++ " to " ++ dst
     copyDir src dst
 
+
 crumbOf :: FilePath -> FilePath
 crumbOf dst = dst </> ".libget"
+
 
 leaveCrumb :: FilePath -> Dependency -> IO ()
 leaveCrumb dst dep = Bz.writeFile (crumbOf dst) (encode dep)
 
-checkCrumb :: FilePath -> Dependency -> IO Bool
-checkCrumb dst dep = do
-  exists <- doesFileExist crumb
-  if exists
-    then (maybe False (dep ==) . decode) <$> Bz.readFile crumb
-    else return False
+
+alreadyUpToDate :: FilePath -> Dependency -> IO Bool
+alreadyUpToDate dst dep =
+  ifM (doesFileExist crumb)
+    ((maybe False (dep ==) . decode) <$> Bz.readFile crumb)
+    (return False)
   where crumb = crumbOf dst
 
+
 rmdir :: FilePath -> IO ()
-rmdir dir = do
-  exists <- doesDirectoryExist dir
-  when exists (removeDirectoryRecursive dir)
+rmdir dir = doesDirectoryExist dir >>= (`when` removeDirectoryRecursive dir)
+
+
+install:: FilePath -> FilePath -> Dependency -> IO ()
+install packageRoot dst dep =
+  unlessM (alreadyUpToDate dst dep) $ do
+    rmdir dst
+    copyDir' (srcDir packageRoot dep) dst
+    leaveCrumb dst dep
+
 
 main' :: CmdOptions -> IO ()
-main' (CmdOptions file root packageDir) = do
+main' (CmdOptions file root packageRoot) = do
   spec' <- decode <$> content
   case spec' of
-    Nothing   -> throw $ userError "input could not be parsed as JSON"
+    Nothing   -> throw $ userError "did not understand specification input"
     Just spec -> do
       when (_specVersion spec `notElem` supportedSpecs) $
         throw $ userError "input version is not supported"
-      forM_ (toList $ _specDependencies spec) $ \(dst', dep) -> do
-        let dst = normalise dst'
-        upToDate <- checkCrumb dst dep
-        unless upToDate $ do
-          rmdir dst
-          copyDir' (srcDir packageDir dep) dst
-          leaveCrumb dst dep
+      forM_ (toList $ _specDependencies spec) $ \(dst, dep) ->
+        install packageRoot (root </> normalise dst) dep
   where
     content = maybe Bz.getContents Bz.readFile file
 

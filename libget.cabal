@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                libget
-version:             0.1.0.0
+version:             0.1.1.0
 synopsis:            An extremely high-level package manager for just about anything
 -- description:
 license:             MIT
@@ -22,10 +22,12 @@ executable libget
   build-depends:       base >=4.6 && <4.7,
                        aeson,
                        bytestring,
+                       cond,
                        containers,
                        optparse-applicative,
-                       text,
                        directory,
                        filepath
   hs-source-dirs:      src
   default-language:    Haskell2010
+  ghc-options: -threaded -Wall -fwarn-tabs -funbox-strict-fields -O2
+               -fno-warn-orphans -fno-warn-unused-do-bind

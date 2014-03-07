@@ -16,7 +16,7 @@ See `sample.json` for a sample dependency specification for your project.
 Currently, `libget` only supports copying files from a base package path where
 each dependency has a directory with its name and subdirectories for each version.
 
-For example, if you have the dependency specification in `spec.json`:
+For example, if you have a dependency specification in `spec.json`:
 
 ```json
 {
