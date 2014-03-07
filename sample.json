@@ -1,0 +1,7 @@
+{
+  "version": "1",
+  "dependencies": {
+    "lib/openssl": { "name": "openssl", "version": "1.0" },
+    "lib/sqlite":  { "name": "sqlite",  "version": "2.0" }
+  }
+}
