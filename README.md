@@ -4,6 +4,29 @@ libget
 An extremely high-level package manager for just about anything
 
 
+Usage
+-----
+
+```bash
+$ libget --help
+```
+
+See `sample.json` for a sample dependency specification for your project.
+
+Currently, `libget` only supports copying files from a base package path where
+each dependency has a directory with its name and subdirectories for each version.
+
+For example, if you have the dependency
+
+```json
+{"name": "openssl", "version": "1.0"}
+```
+
+you must have a directory somewhere like this `packages\openssl\1.0`.
+
+Install from this folder with `libget -p packages`.
+
+
 Building
 --------
 
@@ -15,7 +38,7 @@ You must have
 Then you can
 
 ```bash
-$ cd threadify
+$ cd libget
 $ cabal install
 ```
 
