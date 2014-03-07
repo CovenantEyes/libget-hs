@@ -16,15 +16,24 @@ See `sample.json` for a sample dependency specification for your project.
 Currently, `libget` only supports copying files from a base package path where
 each dependency has a directory with its name and subdirectories for each version.
 
-For example, if you have the dependency
+For example, if you have the dependency specification in `spec.json`:
 
 ```json
-{"name": "openssl", "version": "1.0"}
+{
+  "version": "1",
+  "dependencies": {
+    "lib/openssl": { "name": "openssl", "version": "1.0" }
+  }
+}
 ```
 
-you must have a directory somewhere like this `/packages/openssl/1.0`.
+then you must have a directory somewhere like this `/packages/openssl/1.0`.
 
-Install from this folder with `libget -p "/packages"`.
+Then you can install from this package source like this
+
+```bash
+cat spec.json | libget -p "/packages"
+```
 
 
 Building
