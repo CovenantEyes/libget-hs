@@ -4,28 +4,24 @@
 module Main where
 
 import           Control.Exception (throw)
-import           Control.Monad (when, unless, forM)
+import           Control.Monad (when, unless)
 import           Control.Concurrent.Async (mapConcurrently)
-import           Control.Conditional (unlessM, ifM)
+import           Control.Conditional (ifM)
 import           Data.Aeson (encode, decode)
 import           Data.Aeson.TH
-import           Data.ByteString.Lazy (ByteString)
 import qualified Data.ByteString.Lazy as Bz
-import           Data.Char (toLower)
-import           Data.Functor ((<$>))
-import           Data.Map (Map, toList)
-import           Data.Maybe (maybe, catMaybes)
+import           Data.Map.Strict (Map, toList)
 import           Data.Version (showVersion)
 import           Options.Applicative
 import           System.Directory (doesFileExist, doesDirectoryExist, removeDirectoryRecursive)
 import           System.Exit (exitFailure)
-import           System.FilePath ((</>), (<.>), normalise)
-import           System.IO (stderr, hPutStrLn)
+import           System.FilePath ((</>), normalise)
+
 
 import           Paths_libget (version)
 
 import           CopyDir (copyDir)
-import           Utils (jsonField)
+import           Utils (jsonField, printError, first)
 
 
 data CmdOptions = CmdOptions
@@ -34,6 +30,9 @@ data CmdOptions = CmdOptions
   , _optRoot         :: FilePath
   }
 
+-- IMPROVE: Parse spec as JSON AST first so we can change parsing algorithms based on
+--          the spec version number. As it stands, this will fail to parse anything
+--          that does not exactly match this structure.
 data Dependency = Dependency
   { _depName        :: !String
   , _depVersion     :: !String
@@ -41,7 +40,7 @@ data Dependency = Dependency
 $(deriveJSON defaultOptions {fieldLabelModifier=jsonField} ''Dependency)
 
 instance Show Dependency where
-  show (Dependency name ver) = "dependency " ++ name ++ "@" ++ ver
+  show (Dependency name ver) =  name ++ "@" ++ ver
 
 data Spec = Spec
   { _specVersion      :: !String
@@ -50,7 +49,8 @@ data Spec = Spec
 $(deriveJSON defaultOptions {fieldLabelModifier=jsonField} ''Spec)
 
 
-supportedSpecs = ["1"] :: [String]
+supportedSpecs :: [String]
+supportedSpecs = ["1"]
 
 
 copyDir' :: FilePath -> FilePath -> IO ()
@@ -75,18 +75,10 @@ alreadyUpToDate dst dep =
   where crumb = crumbOf dst
 
 
-rmdir :: FilePath -> IO ()
-rmdir dir = doesDirectoryExist dir >>= (`when` removeDirectoryRecursive dir)
-
-
-first :: (Monad m, Functor m) => (a -> m (Maybe b)) -> [a] -> m (Maybe b)
-first f as = (safeHead . catMaybes) <$> mapM f as
-  where safeHead [] = Nothing
-        safeHead xs = Just (head xs)
-
-
-errorMsg :: String -> IO ()
-errorMsg msg = hPutStrLn stderr $ "Error: " ++ msg
+removeDir :: FilePath -> IO ()
+removeDir dir = do
+  exists <- doesDirectoryExist dir
+  when exists $ removeDirectoryRecursive dir
 
 
 install :: [FilePath] -> FilePath -> Dependency -> IO Bool
@@ -98,16 +90,20 @@ install packageRoots dst dep = do
       src' <- first existing (packageDir dep <$> packageRoots)
       case src' of
         Nothing -> do
-          errorMsg $ "failed to find package for " ++ show dep
+          printError $ "failed to find package for dependency " ++ show dep
           return False
         Just src -> do
-          rmdir dst
-          copyDir' src dst
-          leaveCrumb dst dep
+          doInstall src
           return True
+
   where
     existing dir = ifM (doesDirectoryExist dir) (return $ Just dir) (return Nothing)
     packageDir (Dependency name ver) packageRoot = packageRoot </> name </> ver
+
+    doInstall src = do
+      removeDir dst
+      copyDir' src dst
+      leaveCrumb dst dep
 
 
 main' :: CmdOptions -> IO ()
@@ -129,7 +125,9 @@ main' (CmdOptions packageRoots file root) = do
     installAtRoot (dst, dep) = install packageRoots (root </> normalise dst) dep
 
 
-progName = "libget" :: String
+progName :: String
+progName = "libget"
+
 
 main :: IO ()
 main = execParser opts >>= main'
