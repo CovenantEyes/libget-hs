@@ -32,9 +32,19 @@ then you must have a directory somewhere like this `/packages/openssl/1.0`.
 Then you can install from this package source like this
 
 ```bash
-cat spec.json | libget -p "/packages"
+cat spec.json | libget "/packages"
 ```
 
+### Multiple Package Sources
+
+You can do something like this to try different package sources in order:
+
+```bash
+libget "/local/packages" "/remote/packages" "/really/remote/packages" -f spec.json 
+```
+
+If a package cannot be found in `/local/packages` then `libget` will check
+`/remote/packages`, and so on.
 
 Building
 --------

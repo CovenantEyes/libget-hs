@@ -2,14 +2,14 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                libget
-version:             0.1.1.0
+version:             0.2.0.0
 synopsis:            An extremely high-level package manager for just about anything
 -- description:
 license:             MIT
 license-file:        LICENSE
 author:              3noch
 maintainer:          eacameron@gmail.com
--- copyright:
+copyright:           Covenant Eyes 2014
 category:            Development
 build-type:          Simple
 -- extra-source-files:
@@ -21,6 +21,7 @@ executable libget
   -- other-extensions:
   build-depends:       base >=4.6 && <4.7,
                        aeson,
+                       async,
                        bytestring,
                        cond,
                        containers,
