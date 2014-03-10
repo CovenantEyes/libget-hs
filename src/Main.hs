@@ -6,7 +6,8 @@ module Main where
 import           Control.Exception (throw)
 import           Control.Monad (when, unless)
 import           Control.Concurrent.Async (mapConcurrently)
-import           Control.Conditional (ifM)
+import           Control.Conditional (ifM, whenM)
+import           Control.Monad.Loops (firstM)
 import           Data.Aeson (encode, decode)
 import           Data.Aeson.TH
 import qualified Data.ByteString.Lazy as Bz
@@ -17,11 +18,10 @@ import           System.Directory (doesFileExist, doesDirectoryExist, removeDire
 import           System.Exit (exitFailure)
 import           System.FilePath ((</>), normalise)
 
-
 import           Paths_libget (version)
 
 import           CopyDir (copyDir)
-import           Utils (jsonField, printError, first)
+import           Utils (jsonField, printError)
 
 
 data CmdOptions = CmdOptions
@@ -75,10 +75,9 @@ alreadyUpToDate dst dep =
   where crumb = crumbOf dst
 
 
-removeDir :: FilePath -> IO ()
-removeDir dir = do
-  exists <- doesDirectoryExist dir
-  when exists $ removeDirectoryRecursive dir
+removeDirSafely :: FilePath -> IO ()
+removeDirSafely dir =
+  whenM (doesDirectoryExist dir) $ removeDirectoryRecursive dir
 
 
 install :: [FilePath] -> FilePath -> Dependency -> IO Bool
@@ -87,21 +86,19 @@ install packageRoots dst dep = do
   if done
     then return True
     else do
-      src' <- first existing (packageDir dep <$> packageRoots)
+      src' <- firstM doesDirectoryExist (packageDir dep <$> packageRoots)
       case src' of
         Nothing -> do
           printError $ "failed to find package for dependency " ++ show dep
           return False
         Just src -> do
-          doInstall src
+          installFrom src
           return True
-
   where
-    existing dir = ifM (doesDirectoryExist dir) (return $ Just dir) (return Nothing)
     packageDir (Dependency name ver) packageRoot = packageRoot </> name </> ver
 
-    doInstall src = do
-      removeDir dst
+    installFrom src = do
+      removeDirSafely dst
       copyDir' src dst
       leaveCrumb dst dep
 
