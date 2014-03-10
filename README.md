@@ -29,11 +29,13 @@ For example, if you have a dependency specification in `spec.json`:
 
 then you must have a directory somewhere like this `/packages/openssl/1.0`.
 
-Then you can install from this package source like this
+You can install from this package source like this
 
 ```bash
 cat spec.json | libget "/packages"
 ```
+
+which will put the `openssl` dependency in `./lib/openssl`.
 
 ### Multiple Package Sources
 
