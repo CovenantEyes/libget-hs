@@ -5,6 +5,7 @@ module Main where
 
 import           Control.Exception (throw)
 import           Control.Monad (when, unless)
+import           Control.Concurrent (newMVar)
 import           Control.Concurrent.Async (mapConcurrently)
 import           Control.Conditional (ifM, whenM)
 import           Control.Monad.Loops (firstM)
@@ -21,7 +22,7 @@ import           System.FilePath ((</>), normalise)
 import           Paths_libget (version)
 
 import           CopyDir (copyDir)
-import           Utils (jsonField, printError)
+import           Utils
 
 
 data CmdOptions = CmdOptions
@@ -53,10 +54,10 @@ supportedSpecs :: [String]
 supportedSpecs = ["1"]
 
 
-copyDir' :: FilePath -> FilePath -> IO ()
+copyDir' :: FilePath -> FilePath -> SafeTerm ()
 copyDir' src dst = do
-    putStrLn $ "Copying from " ++ src ++ " to " ++ dst
-    copyDir src dst
+    sprint $ "Copying from " ++ src ++ " to " ++ dst
+    io $ copyDir src dst
 
 
 crumbOf :: FilePath -> FilePath
@@ -80,16 +81,16 @@ removeDirSafely dir =
   whenM (doesDirectoryExist dir) $ removeDirectoryRecursive dir
 
 
-install :: [FilePath] -> FilePath -> Dependency -> IO Bool
+install :: [FilePath] -> FilePath -> Dependency -> SafeTerm Bool
 install packageRoots dst dep = do
-  done <- alreadyUpToDate dst dep
+  done <- io $ alreadyUpToDate dst dep
   if done
     then return True
     else do
-      src' <- firstM doesDirectoryExist (packageDir dep <$> packageRoots)
+      src' <- io $ firstM doesDirectoryExist (packageDir dep <$> packageRoots)
       case src' of
         Nothing -> do
-          printError $ "failed to find package for dependency " ++ show dep
+          sprintError $ "failed to find package for dependency " ++ show dep
           return False
         Just src -> do
           installFrom src
@@ -98,9 +99,9 @@ install packageRoots dst dep = do
     packageDir (Dependency name ver) packageRoot = packageRoot </> name </> ver
 
     installFrom src = do
-      removeDirSafely dst
+      io $ removeDirSafely dst
       copyDir' src dst
-      leaveCrumb dst dep
+      io $ leaveCrumb dst dep
 
 
 main' :: CmdOptions -> IO ()
@@ -116,9 +117,15 @@ main' (CmdOptions packageRoots file root) = do
       when (_specVersion spec `notElem` supportedSpecs) $
         throw $ userError "input version is not supported"
 
-      results <- mapConcurrently installAtRoot (toList $ _specDependencies spec)
+      -- IMPROVE: Use lifted-async or something instead of passing MVar around manually
+      term <- newMVar stdTerm
+      results <- mapConcurrently
+        (runSafeTermWith term . installAtRoot)
+        (toList $ _specDependencies spec)
+
       unless (and results) exitFailure
 
+    installAtRoot :: (FilePath, Dependency) -> SafeTerm Bool
     installAtRoot (dst, dep) = install packageRoots (root </> normalise dst) dep
 
 
