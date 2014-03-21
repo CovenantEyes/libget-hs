@@ -5,14 +5,14 @@ module Utils
   ( jsonField
   , SafeTerm
   , stdTerm
-  , runSafeTerm
   , runSafeTermWith
   , sprint
   , sprintError
+  , io
   ) where
 
 import Control.Applicative (Applicative)
-import Control.Concurrent (MVar, withMVar, newMVar)
+import Control.Concurrent (MVar, withMVar)
 import Data.Char
 import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
 import Control.Monad.Trans (MonadIO, liftIO)
@@ -20,6 +20,7 @@ import System.IO (stdout, stderr, hPutStrLn, Handle)
 
 
 data Terminal = Terminal { _std :: Handle, _err :: Handle }
+
 
 printTerm, printTermErr :: Terminal -> String -> IO ()
 printTerm    (Terminal std _)   = hPutStrLn std
@@ -35,26 +36,21 @@ stdTerm :: Terminal
 stdTerm = Terminal stdout stderr
 
 
-runSafeTerm :: SafeTerm a -> IO a
-runSafeTerm a = do
-  term <- newMVar stdTerm
-  runSafeTermWith term a
-
-
 runSafeTermWith :: MVar Terminal -> SafeTerm a -> IO a
 runSafeTermWith term a = runReaderT (doSafeTerm a) term
 
 
 sprint, sprintError :: String -> SafeTerm ()
-sprint msg = do
-  term <- ask
-  liftIO $ withMVar term (`printTerm` msg)
-
-sprintError msg = do
-  term <- ask
-  liftIO $ withMVar term (`printTermErr` msg)
+sprint      msg = ask >>= io . (`withMVar` (`printTerm` msg))
+sprintError msg = ask >>= io . (`withMVar` (`printTermErr` msg))
 
 
+io :: MonadIO m => IO a -> m a
+io = liftIO
+
+
+-- Helper function to "undecorate" record field names
+-- I.e. jsonField "_recordName" == "name"
 jsonField :: String -> String
 jsonField = map toLower . dropWhile (not . isUpper)
 

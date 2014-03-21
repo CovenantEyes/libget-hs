@@ -4,8 +4,7 @@
 module Main where
 
 import           Control.Exception (throw)
-import           Control.Monad (when, unless, mapM)
-import           Control.Monad.Trans (liftIO)
+import           Control.Monad (when, unless)
 import           Control.Concurrent (newMVar)
 import           Control.Concurrent.Async (mapConcurrently)
 import           Control.Conditional (ifM, whenM)
@@ -23,7 +22,7 @@ import           System.FilePath ((</>), normalise)
 import           Paths_libget (version)
 
 import           CopyDir (copyDir)
-import           Utils (jsonField, SafeTerm, runSafeTermWith, sprintError, sprint, stdTerm)
+import           Utils
 
 
 data CmdOptions = CmdOptions
@@ -58,7 +57,7 @@ supportedSpecs = ["1"]
 copyDir' :: FilePath -> FilePath -> SafeTerm ()
 copyDir' src dst = do
     sprint $ "Copying from " ++ src ++ " to " ++ dst
-    liftIO $ copyDir src dst
+    io $ copyDir src dst
 
 
 crumbOf :: FilePath -> FilePath
@@ -84,11 +83,11 @@ removeDirSafely dir =
 
 install :: [FilePath] -> FilePath -> Dependency -> SafeTerm Bool
 install packageRoots dst dep = do
-  done <- liftIO $ alreadyUpToDate dst dep
+  done <- io $ alreadyUpToDate dst dep
   if done
     then return True
     else do
-      src' <- liftIO $ firstM doesDirectoryExist (packageDir dep <$> packageRoots)
+      src' <- io $ firstM doesDirectoryExist (packageDir dep <$> packageRoots)
       case src' of
         Nothing -> do
           sprintError $ "failed to find package for dependency " ++ show dep
@@ -100,9 +99,9 @@ install packageRoots dst dep = do
     packageDir (Dependency name ver) packageRoot = packageRoot </> name </> ver
 
     installFrom src = do
-      liftIO $ removeDirSafely dst
+      io $ removeDirSafely dst
       copyDir' src dst
-      liftIO $ leaveCrumb dst dep
+      io $ leaveCrumb dst dep
 
 
 main' :: CmdOptions -> IO ()
@@ -121,7 +120,7 @@ main' (CmdOptions packageRoots file root) = do
       -- IMPROVE: Use lifted-async or something instead of passing MVar around manually
       term <- newMVar stdTerm
       results <- mapConcurrently
-        (\x -> runSafeTermWith term $ installAtRoot x)
+        (runSafeTermWith term . installAtRoot)
         (toList $ _specDependencies spec)
 
       unless (and results) exitFailure
