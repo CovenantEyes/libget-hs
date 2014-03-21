@@ -5,6 +5,7 @@ module Main where
 
 import           Control.Exception (throw)
 import           Control.Monad (when, unless)
+import           Control.Monad.Trans (liftIO)
 import           Control.Concurrent.Async (mapConcurrently)
 import           Control.Conditional (ifM, whenM)
 import           Control.Monad.Loops (firstM)
@@ -21,7 +22,7 @@ import           System.FilePath ((</>), normalise)
 import           Paths_libget (version)
 
 import           CopyDir (copyDir)
-import           Utils (jsonField, printError)
+import           Utils (jsonField, SafeTerm, runSafeTerm, sprintError, sprint)
 
 
 data CmdOptions = CmdOptions
@@ -53,10 +54,10 @@ supportedSpecs :: [String]
 supportedSpecs = ["1"]
 
 
-copyDir' :: FilePath -> FilePath -> IO ()
+copyDir' :: FilePath -> FilePath -> SafeTerm ()
 copyDir' src dst = do
-    putStrLn $ "Copying from " ++ src ++ " to " ++ dst
-    copyDir src dst
+    sprint $ "Copying from " ++ src ++ " to " ++ dst
+    liftIO $ copyDir src dst
 
 
 crumbOf :: FilePath -> FilePath
@@ -80,16 +81,16 @@ removeDirSafely dir =
   whenM (doesDirectoryExist dir) $ removeDirectoryRecursive dir
 
 
-install :: [FilePath] -> FilePath -> Dependency -> IO Bool
+install :: [FilePath] -> FilePath -> Dependency -> SafeTerm Bool
 install packageRoots dst dep = do
-  done <- alreadyUpToDate dst dep
+  done <- liftIO $ alreadyUpToDate dst dep
   if done
     then return True
     else do
-      src' <- firstM doesDirectoryExist (packageDir dep <$> packageRoots)
+      src' <- liftIO $ firstM doesDirectoryExist (packageDir dep <$> packageRoots)
       case src' of
         Nothing -> do
-          printError $ "failed to find package for dependency " ++ show dep
+          sprintError $ "failed to find package for dependency " ++ show dep
           return False
         Just src -> do
           installFrom src
@@ -98,14 +99,14 @@ install packageRoots dst dep = do
     packageDir (Dependency name ver) packageRoot = packageRoot </> name </> ver
 
     installFrom src = do
-      removeDirSafely dst
+      liftIO $ removeDirSafely dst
       copyDir' src dst
-      leaveCrumb dst dep
+      liftIO $ leaveCrumb dst dep
 
 
 main' :: CmdOptions -> IO ()
-main' (CmdOptions packageRoots file root) = do
-  spec' <- decode <$> content
+main' (CmdOptions packageRoots file root) = runSafeTerm $ do
+  spec' <- liftIO $ decode <$> liftIO content
   case spec' of
     Nothing   -> throw $ userError "did not understand specification input"
     Just spec -> handleSpec spec
@@ -116,9 +117,10 @@ main' (CmdOptions packageRoots file root) = do
       when (_specVersion spec `notElem` supportedSpecs) $
         throw $ userError "input version is not supported"
 
-      results <- mapConcurrently installAtRoot (toList $ _specDependencies spec)
-      unless (and results) exitFailure
+      results <- mapM installAtRoot (toList $ _specDependencies spec)
+      liftIO $ unless (and results) exitFailure
 
+    installAtRoot :: (FilePath, Dependency) -> SafeTerm Bool
     installAtRoot (dst, dep) = install packageRoots (root </> normalise dst) dep
 
 

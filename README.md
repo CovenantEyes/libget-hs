@@ -32,7 +32,7 @@ then you must have a directory somewhere like this `/packages/openssl/1.0`.
 You can install from this package source like this
 
 ```bash
-cat spec.json | libget "/packages"
+$ cat spec.json | libget "/packages"
 ```
 
 which will put the `openssl` dependency in `./lib/openssl`.
@@ -42,7 +42,7 @@ which will put the `openssl` dependency in `./lib/openssl`.
 You can do something like this to try different package sources in order:
 
 ```bash
-libget "/local/packages" "/remote/packages" "/really/remote/packages" -f spec.json 
+$ libget "/local/packages" "/remote/packages" "/really/remote/packages" -f spec.json 
 ```
 
 If a package cannot be found in `/local/packages` then `libget` will check
