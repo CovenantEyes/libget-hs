@@ -4,15 +4,17 @@
 module Utils
   ( jsonField
   , SafeTerm
+  , stdTerm
   , runSafeTerm
+  , runSafeTermWith
   , sprint
   , sprintError
   ) where
 
-import Control.Applicative (Applicative, (<$>))
-import Control.Concurrent (MVar, withMVar)
+import Control.Applicative (Applicative)
+import Control.Concurrent (MVar, withMVar, newMVar)
 import Data.Char
-import Control.Monad.Reader (MonadReader, ReaderT, ask)
+import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
 import Control.Monad.Trans (MonadIO, liftIO)
 import System.IO (stdout, stderr, hPutStrLn, Handle)
 
@@ -25,8 +27,23 @@ printTermErr (Terminal _   err) = hPutStrLn err
 
 
 newtype SafeTerm a = SafeTerm
-  { runSafeTerm :: ReaderT (MVar Terminal) IO a
+  { doSafeTerm :: ReaderT (MVar Terminal) IO a
   } deriving (Applicative, Monad, MonadIO, MonadReader (MVar Terminal), Functor)
+
+
+stdTerm :: Terminal
+stdTerm = Terminal stdout stderr
+
+
+runSafeTerm :: SafeTerm a -> IO a
+runSafeTerm a = do
+  term <- newMVar stdTerm
+  runSafeTermWith term a
+
+
+runSafeTermWith :: MVar Terminal -> SafeTerm a -> IO a
+runSafeTermWith term a = runReaderT (doSafeTerm a) term
+
 
 sprint, sprintError :: String -> SafeTerm ()
 sprint msg = do

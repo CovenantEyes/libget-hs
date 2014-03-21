@@ -4,8 +4,9 @@
 module Main where
 
 import           Control.Exception (throw)
-import           Control.Monad (when, unless)
+import           Control.Monad (when, unless, mapM)
 import           Control.Monad.Trans (liftIO)
+import           Control.Concurrent (newMVar)
 import           Control.Concurrent.Async (mapConcurrently)
 import           Control.Conditional (ifM, whenM)
 import           Control.Monad.Loops (firstM)
@@ -22,7 +23,7 @@ import           System.FilePath ((</>), normalise)
 import           Paths_libget (version)
 
 import           CopyDir (copyDir)
-import           Utils (jsonField, SafeTerm, runSafeTerm, sprintError, sprint)
+import           Utils (jsonField, SafeTerm, runSafeTermWith, sprintError, sprint, stdTerm)
 
 
 data CmdOptions = CmdOptions
@@ -105,8 +106,8 @@ install packageRoots dst dep = do
 
 
 main' :: CmdOptions -> IO ()
-main' (CmdOptions packageRoots file root) = runSafeTerm $ do
-  spec' <- liftIO $ decode <$> liftIO content
+main' (CmdOptions packageRoots file root) = do
+  spec' <- decode <$> content
   case spec' of
     Nothing   -> throw $ userError "did not understand specification input"
     Just spec -> handleSpec spec
@@ -117,8 +118,13 @@ main' (CmdOptions packageRoots file root) = runSafeTerm $ do
       when (_specVersion spec `notElem` supportedSpecs) $
         throw $ userError "input version is not supported"
 
-      results <- mapM installAtRoot (toList $ _specDependencies spec)
-      liftIO $ unless (and results) exitFailure
+      -- IMPROVE: Use lifted-async or something instead of passing MVar around manually
+      term <- newMVar stdTerm
+      results <- mapConcurrently
+        (\x -> runSafeTermWith term $ installAtRoot x)
+        (toList $ _specDependencies spec)
+
+      unless (and results) exitFailure
 
     installAtRoot :: (FilePath, Dependency) -> SafeTerm Bool
     installAtRoot (dst, dep) = install packageRoots (root </> normalise dst) dep
