@@ -2,4 +2,6 @@
 *.hi
 *.o
 *.sublime-*
+.cabal-sandbox
+cabal.sandbox.config
 dist/
