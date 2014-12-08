@@ -7,21 +7,21 @@ module CopyDir
 import System.Directory
 import System.FilePath ((</>))
 import Control.Applicative ((<$>))
+import Control.Concurrent.Async (mapConcurrently)
 import Control.Exception (throw)
-import Control.Monad (when, forM_)
+import Control.Monad (when, void)
 
 
-copyDir ::  FilePath -> FilePath -> IO ()
+copyDir :: FilePath -> FilePath -> IO ()
 copyDir src dst = do
   whenM (not <$> doesDirectoryExist src) $
     throw (userError "source does not exist")
-  whenM (doesFileOrDirectoryExist dst) $
+  whenM (doesDirectoryExist dst `orM` doesFileExist dst) $
     throw (userError "destination already exists")
 
   createDirectoryIfMissing True dst
-  content <- getDirectoryContents src
-  let xs = filter (`notElem` [".", ".."]) content
-  forM_ xs $ \name -> do
+  files <- filter (`notElem` [".", ".."]) <$> getDirectoryContents src
+  void $ forConcurrently files $ \name -> do
     let srcPath = src </> name
     let dstPath = dst </> name
     isDirectory <- doesDirectoryExist srcPath
@@ -30,6 +30,8 @@ copyDir src dst = do
       else copyFile srcPath dstPath
 
   where
-    doesFileOrDirectoryExist x = orM [doesDirectoryExist x, doesFileExist x]
-    orM xs = or <$> sequence xs
+    forConcurrently = flip mapConcurrently
     whenM s r = s >>= flip when r
+
+    orM :: Monad m => m Bool -> m Bool -> m Bool
+    orM m1 m2 = m1 >>= \x-> if x then return x else m2

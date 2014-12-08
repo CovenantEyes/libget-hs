@@ -71,7 +71,7 @@ leaveCrumb dst dep = Bz.writeFile (crumbOf dst) (encode dep)
 alreadyUpToDate :: FilePath -> Dependency -> IO Bool
 alreadyUpToDate dst dep =
   ifM (doesFileExist crumb)
-    ((maybe False (dep ==) . decode) <$> Bz.readFile crumb)
+    (maybe False (dep ==) . decode <$> Bz.readFile crumb)
     (return False)
   where crumb = crumbOf dst
 

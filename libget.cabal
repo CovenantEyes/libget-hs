@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                libget
-version:             0.2.4.0
+version:             0.2.5.0
 synopsis:            An extremely high-level package manager for just about anything
 -- description:
 license:             MIT
